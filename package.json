@@ -9,19 +9,35 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^1.0.15",
+    "@ai-sdk/openai": "^2.0.23",
+    "@ai-sdk/react": "^2.0.29",
+    "@types/katex": "^0.16.7",
+    "ai": "^5.0.29",
+    "html2canvas": "^1.4.1",
+    "katex": "^0.16.22",
+    "next": "15.5.2",
+    "openai": "^5.16.0",
+    "pdfjs-dist": "^5.4.149",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.2"
+    "react-katex": "^3.1.0",
+    "react-markdown": "^10.1.0",
+    "react-pdf": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-mathjax": "^7.1.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
