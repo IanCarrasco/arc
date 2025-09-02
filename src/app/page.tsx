@@ -110,7 +110,7 @@ export default function Home() {
       <div className="w-full max-w-md space-y-8">
         {/* Title */}
         <h1 className="text-4xl font-light text-gray-900 dark:text-white text-center tracking-wide">
-          arc
+          ark
         </h1>
         
         {/* Input Box with Submit Button */}
