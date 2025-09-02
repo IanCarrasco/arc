@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import ChatPanel from '../../components/ChatPanel';
+import Link from 'next/link';
 
 interface PaperPageProps {
   params: Promise<{
@@ -87,7 +88,7 @@ export default function PaperPage({ params }: PaperPageProps) {
       {/* Header Bar */}
       <header className="w-full bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 px-4 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <a 
+          <Link 
             href="/" 
             className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex items-center gap-2"
           >
@@ -95,7 +96,7 @@ export default function PaperPage({ params }: PaperPageProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back to search
-          </a>
+          </Link>
           <h1 className="text-lg font-light text-gray-900 dark:text-white">
             arXiv Paper
           </h1>
