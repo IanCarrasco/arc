@@ -30,11 +30,20 @@ body {
 /* KaTeX math styling */
 .katex {
   font-size: 1em;
+  line-height: 1.2;
+  overflow-x: auto;
+  overflow-y: hidden;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .katex-display {
   margin: 0.5em 0;
   text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  word-wrap: break-word;
+  font-size: 1.2em;
 }
 
 .katex-display > .katex {
@@ -42,25 +51,103 @@ body {
   white-space: nowrap;
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   text-align: initial;
 }
 
-/* Hide vertical scrollbars on inline math elements */
+/* Inline math styling */
+.katex:not(.katex-display) {
+  display: inline;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  font-size: 1.05em;
+}
+
+/* Fix fraction rendering */
+.katex .frac-line {
+  border-bottom-width: 0.04em;
+}
+
+.katex .frac-line::before {
+  border-bottom-width: 0.04em;
+}
+
+/* Ensure proper sizing for math elements */
+.katex .mord,
+.katex .mrel,
+.katex .mbin,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .mop,
+.katex .mord,
+.katex .mrel,
+.katex .mbin,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .mop {
+  overflow: visible;
+}
+
+/* Fix overflow in chat messages */
 .katex {
-  overflow-y: hidden !important;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
+/* Ensure math doesn't break layout */
 .katex-display {
-  overflow-y: hidden !important;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.katex-display > .katex {
-  overflow-y: hidden !important;
+/* Chat message math styling */
+.chat-message .katex {
+  font-size: 0.95em;
+  line-height: 1.1;
 }
 
-/* Hide scrollbars on all KaTeX elements */
-.katex * {
-  overflow-y: hidden !important;
+/* Responsive inline math sizing based on container width */
+.chat-message .katex:not(.katex-display) {
+  font-size: 0.95em;
+}
+
+/* Larger inline math for wider messages */
+.max-w-sm .katex:not(.katex-display),
+.max-w-md .katex:not(.katex-display) {
+  font-size: 1.0em;
+}
+
+.max-w-lg .katex:not(.katex-display),
+.max-w-xl .katex:not(.katex-display) {
+  font-size: 1.05em;
+}
+
+.max-w-2xl .katex:not(.katex-display) {
+  font-size: 1.1em;
+}
+
+.chat-message .katex-display {
+  font-size: 1.1em;
+  margin: 0.4em 0;
+}
+
+/* Ensure math elements don't overflow chat containers */
+.chat-message {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.chat-message .katex,
+.chat-message .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 /* Hide scrollbar for webkit browsers */
@@ -113,5 +200,60 @@ body {
   
   .scrollbar-track-hide::-webkit-scrollbar-thumb:hover {
     background-color: rgba(75, 85, 99, 0.8);  /* Darker on hover */
+  }
+}
+
+/* Typing indicator animation */
+@keyframes typing-pulse {
+  0%, 60%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  30% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #6b7280;
+  animation: typing-pulse 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 200ms;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 400ms;
+}
+
+/* Dark mode typing indicator */
+@media (prefers-color-scheme: dark) {
+  .typing-dot {
+    background-color: #9ca3af;
   }
 }

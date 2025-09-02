@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from "@ai-sdk/react";
 import 'katex/dist/katex.min.css';
 
@@ -22,8 +22,18 @@ interface ChatPanelProps {
 const renderMarkdown = (text: string) => {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      remarkPlugins={[
+        remarkGfm, 
+        [remarkMath, { singleDollarTextMath: true }]
+      ]}
+      rehypePlugins={[[rehypeKatex, { 
+        strict: false,
+        throwOnError: false,
+        errorColor: '#cc0000',
+        macros: {
+          "\\f": "#1f(#2)"
+        }
+      }]]}
       components={{
         // Custom styling for markdown elements
         h1: ({ children }) => <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 mt-6 border-b border-gray-200 dark:border-gray-700 pb-2">{children}</h1>,
@@ -36,6 +46,13 @@ const renderMarkdown = (text: string) => {
         li: ({ children }) => <li className="pl-3 leading-relaxed font-medium">{children}</li>,
         code: ({ children, className }) => {
           const isInline = !className;
+          const isMath = className?.includes('language-math') || className?.includes('math');
+          
+          if (isMath) {
+            // Let KaTeX handle math rendering - don't wrap in code styling
+            return <span>{children}</span>;
+          }
+          
           if (isInline) {
             return <code className="bg-gray-200 dark:bg-gray-700 px-1 py-0.5 rounded text-sm font-mono">{children}</code>;
           }
@@ -44,6 +61,14 @@ const renderMarkdown = (text: string) => {
               <code className="text-sm font-mono text-gray-900 dark:text-white">{children}</code>
             </pre>
           );
+        },
+        // Handle inline math elements specifically
+        span: ({ children, className, ...props }: any) => {
+          // Check if this is a KaTeX math element
+          if (className?.includes('katex') || className?.includes('math') || props['data-math']) {
+            return <span className={className} {...props}>{children}</span>;
+          }
+          return <span className={className} {...props}>{children}</span>;
         },
         blockquote: ({ children }) => (
           <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic mb-2 text-gray-700 dark:text-gray-300">
@@ -93,10 +118,162 @@ interface Thread {
   lastMessageAt: Date;
 }
 
+// Memoized input component to prevent re-renders
+const ChatInput = React.memo(({ 
+  onSubmit, 
+  disabled, 
+  placeholder,
+  onStop,
+  isStreaming
+}: { 
+  onSubmit: (input: string) => void;
+  disabled: boolean;
+  placeholder: string;
+  onStop: () => void;
+  isStreaming: boolean;
+}) => {
+  const [input, setInput] = useState('');
+
+  const handleSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (input.trim()) {
+      onSubmit(input.trim());
+      setInput('');
+    }
+  }, [input, onSubmit]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+  }, []);
+
+  return (
+    <div className="border-t border-gray-200 dark:border-gray-800 px-6 py-4 flex-shrink-0">
+      <form onSubmit={handleSubmit} className="relative">
+        <input
+          type="text"
+          value={input}
+          onChange={handleInputChange}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
+        />
+        {isStreaming ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors duration-200"
+            aria-label="Stop streaming"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 6h12v12H6z"
+              />
+            </svg>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={disabled || !input.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white transition-colors duration-200"
+            aria-label="Send message"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
+            </svg>
+          </button>
+        )}
+      </form>
+    </div>
+  );
+});
+
+ChatInput.displayName = 'ChatInput';
+
+// Typing indicator animation component
+const TypingIndicator = React.memo(() => {
+  return (
+    <div className="typing-indicator">
+      <div className="typing-dot"></div>
+      <div className="typing-dot"></div>
+      <div className="typing-dot"></div>
+    </div>
+  );
+});
+
+TypingIndicator.displayName = 'TypingIndicator';
+
+// Memoized message component to prevent unnecessary re-renders
+const ChatMessage = React.memo(({ message, showRaw }: { message: any; showRaw: boolean }) => {
+  // Calculate message content length for dynamic width
+  const messageText = message.parts?.find((part: any) => part.type === 'text')?.text || '';
+  const contentLength = messageText.length;
+  
+  // Determine width class based on content length
+  const getWidthClass = (length: number) => {
+    if (length < 50) return 'max-w-xs';
+    if (length < 100) return 'max-w-sm';
+    if (length < 200) return 'max-w-md';
+    if (length < 400) return 'max-w-lg';
+    if (length < 600) return 'max-w-xl';
+    return 'max-w-2xl';
+  };
+
+  return (
+    <div className={`flex items-start space-x-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+      <div className={`rounded-lg px-3 py-2 ${getWidthClass(contentLength)} overflow-hidden ${message.role === 'user'
+        ? 'bg-blue-500 text-white'
+        : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+        }`}>
+        <div className="text-sm break-words overflow-x-auto chat-message">
+          {message.parts?.map((part: any, index: number) => {
+            switch (part.type) {
+              case 'text':
+                return (
+                  <div key={index}>
+                    {showRaw ? (
+                      <pre className="whitespace-pre-wrap font-mono text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
+                        {part.text}
+                      </pre>
+                    ) : (
+                      renderMarkdown(part.text)
+                    )}
+                  </div>
+                );
+              default:
+                return null;
+            }
+          })}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ChatMessage.displayName = 'ChatMessage';
+
 export default function ChatPanel({ paperUrl }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const [input, setInput] = useState('');
   const isInitialRender = useRef(true);
   const prevStatusRef = useRef<string>('');
   
@@ -105,6 +282,9 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
   const [activeThreadId, setActiveThreadId] = useState<string>('');
   const [newThreadTitle, setNewThreadTitle] = useState('');
   const [showNewThreadInput, setShowNewThreadInput] = useState(false);
+  
+  // Raw response toggle state
+  const [showRawResponse, setShowRawResponse] = useState(false);
 
   // Create a unique storage key based on the paper URL
   const storageKey = React.useMemo(() => 
@@ -121,6 +301,7 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
     status,
     sendMessage,
     setMessages,
+    stop,
   } = useChat();
 
   const createDefaultThread = React.useCallback(() => {
@@ -230,17 +411,8 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
       setTimeout(() => {
         const container = messagesContainerRef.current;
         if (container) {
-          // Try multiple scrolling approaches for better reliability
-          try {
-            // First try smooth scrolling
-            container.scrollTo({
-              top: container.scrollHeight,
-              behavior: 'smooth'
-            });
-          } catch (error) {
-            // Fallback to instant scroll
-            container.scrollTop = container.scrollHeight;
-          }
+          // Use instant scroll instead of smooth scroll
+          container.scrollTop = container.scrollHeight;
         }
       }, 150);
     }
@@ -289,30 +461,22 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
     }
   }, [status, activeThreadId, storageKey, threadsStorageKey, messages]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (input.trim()) {
-      // Get API key from localStorage
-      const apiKey = localStorage.getItem('vercel-ai-gateway-key');
-      
-      await sendMessage({
-        text: input,
-      },
-        {
-          body: {
-            input_file: paperUrl,
-            apiKey: apiKey || undefined,
-          }
-        });
-      setInput('');
-    }
-  };
+  const handleSubmit = useCallback(async (inputText: string) => {
+    // Get API key from localStorage
+    const apiKey = localStorage.getItem('vercel-ai-gateway-key');
+    
+    await sendMessage({
+      text: inputText,
+    },
+      {
+        body: {
+          input_file: paperUrl,
+          apiKey: apiKey || undefined,
+        }
+      });
+  }, [sendMessage, paperUrl]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
-  };
-
-  const handleClearMessages = () => {
+  const handleClearMessages = useCallback(() => {
     setMessages([]);
     // Also clear from localStorage for current thread
     if (activeThreadId) {
@@ -323,9 +487,9 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
         console.error('Failed to clear thread messages from localStorage:', error);
       }
     }
-  };
+  }, [activeThreadId, storageKey, setMessages]);
 
-  const createNewThread = () => {
+  const createNewThread = useCallback(() => {
     const newThread: Thread = {
       id: Date.now().toString(),
       title: newThreadTitle.trim() || `Thread ${threads.length + 1}`,
@@ -336,9 +500,11 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
     const updatedThreads = [...threads, newThread];
     
     setThreads(updatedThreads);
+    // Automatically switch to the new thread
     setActiveThreadId(newThread.id);
     setNewThreadTitle('');
     setShowNewThreadInput(false);
+    // Clear messages for the new thread (it will be empty)
     setMessages([]);
     
     try {
@@ -346,13 +512,25 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
     } catch (error) {
       console.error('Failed to save threads to localStorage:', error);
     }
-  };
+  }, [newThreadTitle, threads, threadsStorageKey, setMessages]);
 
-  const switchToThread = (threadId: string) => {
+  const switchToThread = useCallback((threadId: string) => {
     setActiveThreadId(threadId);
-  };
+    // Instantly scroll to bottom when switching threads
+    setTimeout(() => {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }, 50);
+  }, []);
 
-  const deleteThread = (threadId: string) => {
+  const deleteThread = useCallback((threadId: string) => {
+    // Don't allow deleting the only thread
+    if (threads.length <= 1) {
+      return;
+    }
+    
     const updatedThreads = threads.filter(thread => thread.id !== threadId);
     setThreads(updatedThreads);
     
@@ -374,11 +552,34 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
     } catch (error) {
       console.error('Failed to delete thread from localStorage:', error);
     }
-  };
+  }, [threads, activeThreadId, storageKey, threadsStorageKey, setMessages]);
 
-  const getActiveThread = () => {
+  const getActiveThread = useCallback(() => {
     return threads.find(thread => thread.id === activeThreadId);
-  };
+  }, [threads, activeThreadId]);
+
+  // Helper function to check if we should show typing indicator
+  const shouldShowTypingIndicator = useCallback(() => {
+    if (status !== 'streaming' || messages.length === 0) {
+      return false;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    
+    // Show typing indicator if last message is from user
+    if (lastMessage?.role === 'user') {
+      return true;
+    }
+    
+    // Show typing indicator if last message is from assistant but has no content
+    if (lastMessage?.role === 'assistant') {
+      return !lastMessage.parts || 
+             lastMessage.parts.length === 0 || 
+             !lastMessage.parts.some((part: any) => part.type === 'text' && part.text?.trim());
+    }
+    
+    return false;
+  }, [status, messages]);
 
   return (
     <div className="flex flex-col h-full">
@@ -398,7 +599,7 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
                   className={`flex items-center space-x-2 px-4 py-3 border-r border-gray-200 dark:border-gray-800 cursor-pointer transition-colors min-w-0 ${
                     thread.id === activeThreadId
                       ? 'bg-white dark:bg-black border-b-2 border-green-500'
-                      : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      : 'bg-gray-50 dark:bg-black hover:bg-gray-800 dark:hover:bg-gray-800'
                   }`}
                   onClick={() => switchToThread(thread.id)}
                 >
@@ -414,8 +615,13 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
                       e.stopPropagation();
                       deleteThread(thread.id);
                     }}
-                    className="ml-1 p-1 text-gray-400 hover:text-red-500 transition-colors rounded"
-                    title="Close thread"
+                    disabled={threads.length <= 1}
+                    className={`ml-1 p-1 transition-colors rounded ${
+                      threads.length <= 1 
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                        : 'text-gray-400 hover:text-red-500'
+                    }`}
+                    title={threads.length <= 1 ? "Cannot delete the only thread" : "Close thread"}
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -442,6 +648,20 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
           
           {/* Right side actions */}
           <div className="flex items-center space-x-2 px-4 py-3 border-l border-gray-200 dark:border-gray-800">
+            <button
+              onClick={() => setShowRawResponse(!showRawResponse)}
+              className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 ${
+                showRawResponse
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+              title={showRawResponse ? "Show formatted response" : "Show raw response"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+              <span>{showRawResponse ? 'Formatted' : 'Raw'}</span>
+            </button>
             {messages.length > 0 && (
               <button
                 onClick={handleClearMessages}
@@ -511,56 +731,15 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
         )}
 
         {/* Chat Messages */}
-        {messages.map((message) => {
-          // Calculate message content length for dynamic width
-          const messageText = message.parts?.find(part => part.type === 'text')?.text || '';
-          const contentLength = messageText.length;
-          
-          // Determine width class based on content length
-          const getWidthClass = (length: number) => {
-            if (length < 50) return 'max-w-xs';
-            if (length < 100) return 'max-w-sm';
-            if (length < 200) return 'max-w-md';
-            if (length < 400) return 'max-w-lg';
-            if (length < 600) return 'max-w-xl';
-            return 'max-w-2xl';
-          };
+        {messages.map((message) => (
+          <ChatMessage key={message.id} message={message} showRaw={showRawResponse} />
+        ))}
 
-          return (
-            <div key={message.id} className={`flex items-start space-x-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`rounded-lg px-3 py-2 ${getWidthClass(contentLength)} overflow-hidden ${message.role === 'user'
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                }`}>
-                <div className="text-sm break-words">
-                  {message.parts?.map((part, index) => {
-                    switch (part.type) {
-                      case 'text':
-                        return <div key={index}>{renderMarkdown(part.text)}</div>;
-                      default:
-                        return null;
-                    }
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Typing Indicator */}
-        {status === 'streaming' && (
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            </div>
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 flex items-center w-full max-w-2xl">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
+        {/* Loading state when streaming but no assistant message yet or assistant message is empty */}
+        {shouldShowTypingIndicator() && (
+          <div className="flex items-start space-x-3">
+            <div className="rounded-lg px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white max-w-xs min-w-[60px]">
+              <TypingIndicator />
             </div>
           </div>
         )}
@@ -572,31 +751,31 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
         {messages.length === 0 && (
           <div className="space-y-2">
             <button
-              onClick={() => setInput('What is the main contribution of this paper?')}
+              onClick={() => handleSubmit('What is the main contribution of this paper?')}
               className="w-full text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               • What is the main contribution of this paper?
             </button>
             <button
-              onClick={() => setInput('Can you summarize the methodology?')}
+              onClick={() => handleSubmit('Can you summarize the methodology?')}
               className="w-full text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               • Can you summarize the methodology?
             </button>
             <button
-              onClick={() => setInput('What are the key results?')}
+              onClick={() => handleSubmit('What are the key results?')}
               className="w-full text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               • What are the key results?
             </button>
             <button
-              onClick={() => setInput('Explain the mathematical formulas and equations used')}
+              onClick={() => handleSubmit('Explain the mathematical formulas and equations used')}
               className="w-full text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               • Explain the mathematical formulas and equations used
             </button>
             <button
-              onClick={() => setInput('Create a summary with key findings and methodology')}
+              onClick={() => handleSubmit('Create a summary with key findings and methodology')}
               className="w-full text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               • Create a summary with key findings and methodology
@@ -606,39 +785,13 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 dark:border-gray-800 px-6 py-4 flex-shrink-0">
-        <form onSubmit={handleSubmit} className="relative">
-          <input
-            type="text"
-            value={input}
-            onChange={handleInputChange}
-            placeholder="Ask about this paper..."
-            disabled={status === 'streaming'}
-            className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={status === 'streaming' || !input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white transition-colors duration-200"
-            aria-label="Send message"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-              />
-            </svg>
-          </button>
-        </form>
-      </div>
+      <ChatInput 
+        onSubmit={handleSubmit}
+        disabled={status === 'streaming'}
+        placeholder="Ask about this paper..."
+        onStop={stop}
+        isStreaming={status === 'streaming'}
+      />
     </div>
   );
 }
