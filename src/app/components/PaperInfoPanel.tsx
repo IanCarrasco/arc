@@ -10,6 +10,15 @@ interface PaperInfoPanelProps {
 }
 
 export default function PaperInfoPanel({ title, authors, abstract, displayUrl }: PaperInfoPanelProps) {
+  console.log('PaperInfoPanel received:', { title, authors, abstract, displayUrl });
+
+  // Function to decode HTML entities
+  const decodeHtmlEntities = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+  };
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800">
       {/* Header */}
@@ -18,14 +27,14 @@ export default function PaperInfoPanel({ title, authors, abstract, displayUrl }:
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-track-hide px-4 py-4 space-y-6">
         {/* Title */}
         <div>
           <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
             Title
           </h3>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-relaxed">
-            {title || 'Loading...'}
+            {title ? decodeHtmlEntities(title) : 'Loading...'}
           </h1>
         </div>
 
@@ -37,9 +46,9 @@ export default function PaperInfoPanel({ title, authors, abstract, displayUrl }:
           <div className="space-y-1">
             {authors.length > 0 ? (
               authors.map((author, index) => (
-                <p key={index} className="text-sm text-gray-700 dark:text-gray-300">
-                  {author}
-                </p>
+                <span key={index} className="text-sm text-gray-700 dark:text-gray-300">
+                  {`${decodeHtmlEntities(author)}`}{index === authors.length - 1 ? '' : ', '}
+                </span>
               ))
             ) : (
               <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
@@ -54,7 +63,7 @@ export default function PaperInfoPanel({ title, authors, abstract, displayUrl }:
           </h3>
           <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             {abstract ? (
-              <p className="whitespace-pre-wrap">{abstract}</p>
+              <p className="whitespace-pre-wrap">{decodeHtmlEntities(abstract)}</p>
             ) : (
               <p className="text-gray-500 dark:text-gray-400">Loading...</p>
             )}

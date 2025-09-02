@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import ChatPanel from '../../components/ChatPanel';
 import PaperInfoPanel from '../../components/PaperInfoPanel';
+import { PaperMetadataStorage, PaperMetadata } from '../../utils/paperMetadata';
 
 interface PaperPageProps {
   params: Promise<{
@@ -16,7 +17,7 @@ export default function PaperPage({ params }: PaperPageProps) {
 
   // State for panel width
   const [panelWidth, setPanelWidth] = useState(384); // 96 * 4 = 384px (w-96)
-  const [leftPanelWidth, setLeftPanelWidth] = useState(320); // Left panel width
+  const [leftPanelWidth, setLeftPanelWidth] = useState(400); // Left panel width
   const [isResizing, setIsResizing] = useState(false);
   const [isLeftResizing, setIsLeftResizing] = useState(false);
   const [paperTitle, setPaperTitle] = useState('');
@@ -41,66 +42,109 @@ export default function PaperPage({ params }: PaperPageProps) {
     ? `arXiv:${decodedParam}`
     : decodedParam;
 
-  // To make this work from localhost (avoid CORS issues), use a proxy server.
-  // Fetch the arXiv page and extract metadata
+  // Load paper metadata from cache or fetch if needed
   React.useEffect(() => {
-    if (isArxivReference) {
-      fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://arxiv.org/abs/${decodedParam}`)}`)
-        .then(response => response.json())
-        .then(data => {
-          // The HTML is in data.contents
-          const html = data.contents;
-          // Use DOMParser to parse the HTML and extract metadata
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, "text/html");
-          
-          // Extract title
-          const ogTitleMeta = doc.querySelector('meta[property="og:title"]');
-          const ogTitle = ogTitleMeta ? ogTitleMeta.getAttribute('content') : null;
-          setPaperTitle(ogTitle || '');
-          
-          // Extract authors
-          const authorsElement = doc.querySelector('.authors a');
-          if (authorsElement) {
-            const authorsText = authorsElement.textContent || '';
-            // Split by common separators and clean up
-            const authors = authorsText
-              .split(/,\s*|\sand\s+/i)
-              .map(author => author.trim())
-              .filter(author => author.length > 0);
-            setPaperAuthors(authors);
+    console.log('useEffect triggered with:', { paperUrl, displayUrl, isArxivReference, decodedParam });
+
+    const loadPaperMetadata = async () => {
+      try {
+        // First check if we have cached metadata
+        const cachedMetadata = PaperMetadataStorage.get(paperUrl);
+
+        console.log('Checking cache for:', paperUrl, 'Found:', !!cachedMetadata);
+
+        if (cachedMetadata && PaperMetadataStorage.hasValidCache(paperUrl)) {
+          // Use cached data
+          console.log('Using cached metadata for:', paperUrl);
+          setPaperTitle(cachedMetadata.title);
+          setPaperAuthors(cachedMetadata.authors);
+          setPaperAbstract(cachedMetadata.abstract);
+          return;
+        }
+
+        console.log('No valid cache found, will fetch metadata for:', paperUrl, 'isArxivReference:', isArxivReference);
+
+        // No valid cache, need to fetch
+        if (isArxivReference) {
+          console.log('Making API call to:', `/api/arxiv?id=${encodeURIComponent(decodedParam)}`);
+          try {
+            const response = await fetch(`/api/arxiv?id=${encodeURIComponent(decodedParam)}`);
+            console.log('API response status:', response.status, response.ok);
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Fetched arXiv data:', data);
+
+            // Create and store metadata
+            const metadata = PaperMetadataStorage.createFromArxivResponse(data, paperUrl, displayUrl);
+            PaperMetadataStorage.store(metadata);
+            console.log('Stored metadata in localStorage:', metadata);
+
+            // Update state
+            setPaperTitle(metadata.title);
+            setPaperAuthors(metadata.authors);
+            setPaperAbstract(metadata.abstract);
+          } catch (error) {
+            console.error('Failed to fetch arXiv metadata:', error);
+
+            // Create and store basic metadata as fallback
+            const metadata = PaperMetadataStorage.createBasic(paperUrl, displayUrl);
+            PaperMetadataStorage.store(metadata);
+            console.log('Stored fallback metadata:', metadata);
+
+            setPaperTitle(displayUrl);
+            setPaperAuthors([]);
+            setPaperAbstract('');
           }
-          
-          // Extract abstract
-          const abstractElement = doc.querySelector('.abstract');
-          if (abstractElement) {
-            const abstractText = abstractElement.textContent || '';
-            // Clean up the abstract text
-            const cleanAbstract = abstractText
-              .replace(/^\s*Abstract:\s*/i, '')
-              .replace(/\s+/g, ' ')
-              .trim();
-            setPaperAbstract(cleanAbstract);
-          }
-        })
-        .catch(err => {
-          console.error('Failed to fetch or parse arXiv page:', err);
-        });
-    } else {
-      // For non-arXiv URLs, just set the URL as title
-      setPaperTitle(displayUrl);
-    }
-  }, [decodedParam, isArxivReference, displayUrl]);
+        } else {
+          // For non-arXiv URLs, create and store basic metadata
+          console.log('Creating basic metadata for non-arXiv URL:', paperUrl);
+          const metadata = PaperMetadataStorage.createBasic(paperUrl, displayUrl);
+          PaperMetadataStorage.store(metadata);
+          console.log('Stored basic metadata:', metadata);
+
+          setPaperTitle(displayUrl);
+          setPaperAuthors([]);
+          setPaperAbstract('');
+        }
+
+        console.log('Metadata loading complete');
+      } catch (error) {
+        console.error('Error in loadPaperMetadata:', error);
+        // Fallback to basic info
+        setPaperTitle(displayUrl);
+        setPaperAuthors([]);
+        setPaperAbstract('');
+      }
+    };
+
+    loadPaperMetadata();
+  }, [paperUrl, displayUrl, isArxivReference, decodedParam]);
+
+  // Add a separate effect to handle initial load
+  React.useEffect(() => {
+    console.log('Initial load effect triggered');
+    // This ensures the component has mounted before trying to fetch
+  }, []);
 
 
   // Handle mouse down on right resize handle
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start resizing if left mouse button is pressed
+    if (e.button !== 0) return;
+    
     e.preventDefault();
     setIsResizing(true);
   }, []);
 
   // Handle mouse down on left resize handle
   const handleLeftMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start resizing if left mouse button is pressed
+    if (e.button !== 0) return;
+    
     e.preventDefault();
     setIsLeftResizing(true);
   }, []);
@@ -108,6 +152,12 @@ export default function PaperPage({ params }: PaperPageProps) {
   // Handle mouse move for right panel resizing
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return;
+    
+    // Only resize if we're actually dragging (mouse button is down)
+    if (e.buttons !== 1) {
+      setIsResizing(false);
+      return;
+    }
     
     const newWidth = window.innerWidth - e.clientX;
     const minWidth = 300; // Minimum width
@@ -121,6 +171,12 @@ export default function PaperPage({ params }: PaperPageProps) {
   // Handle mouse move for left panel resizing
   const handleLeftMouseMove = useCallback((e: MouseEvent) => {
     if (!isLeftResizing) return;
+    
+    // Only resize if we're actually dragging (mouse button is down)
+    if (e.buttons !== 1) {
+      setIsLeftResizing(false);
+      return;
+    }
     
     const newWidth = e.clientX;
     const minWidth = 250; // Minimum width
@@ -137,31 +193,41 @@ export default function PaperPage({ params }: PaperPageProps) {
     setIsLeftResizing(false);
   }, []);
 
+  // Handle mouse leave to stop resizing if mouse leaves the window
+  const handleMouseLeave = useCallback(() => {
+    setIsResizing(false);
+    setIsLeftResizing(false);
+  }, []);
+
   // Add and remove event listeners for right panel
   React.useEffect(() => {
     if (isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mouseleave', handleMouseLeave);
       
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mouseleave', handleMouseLeave);
       };
     }
-  }, [isResizing, handleMouseMove, handleMouseUp]);
+  }, [isResizing, handleMouseMove, handleMouseUp, handleMouseLeave]);
 
   // Add and remove event listeners for left panel
   React.useEffect(() => {
     if (isLeftResizing) {
       document.addEventListener('mousemove', handleLeftMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mouseleave', handleMouseLeave);
       
       return () => {
         document.removeEventListener('mousemove', handleLeftMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mouseleave', handleMouseLeave);
       };
     }
-  }, [isLeftResizing, handleLeftMouseMove, handleMouseUp]);
+  }, [isLeftResizing, handleLeftMouseMove, handleMouseUp, handleMouseLeave]);
 
   // Add cursor style to body when resizing
   React.useEffect(() => {
@@ -176,21 +242,12 @@ export default function PaperPage({ params }: PaperPageProps) {
 
   return (
     <div className="min-h-screen bg-white dark:bg-black flex flex-col">
-      {/* Header Bar */}
-      <header className="w-full bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-center">
-          <h1 className="text-lg font-light text-gray-900 dark:text-white">
-            {paperTitle}
-          </h1>
-        </div>
-      </header>
-      
-      {/* Main Content */}
-      <main className="flex-1 flex">
+      {/* Main Content - Adjusted for header */}
+      <main className="flex-1 flex pt-16">
         {/* Paper Info Panel - Left Side */}
-        <div 
+        <div
           className="flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black"
-          style={{ width: `${leftPanelWidth}px` }}
+          style={{ width: `${leftPanelWidth}px`, height: 'calc(100vh - 4rem)' }}
         >
           <PaperInfoPanel 
             title={paperTitle}
@@ -212,7 +269,7 @@ export default function PaperPage({ params }: PaperPageProps) {
         <div className="flex-1 px-4 py-6">
           <div className="w-full max-w-6xl mx-auto space-y-6">
             {/* PDF Viewer */}
-            <div className="relative w-full h-[calc(100vh-50px)]">
+            <div className="relative w-full h-[calc(100vh-6rem)]">
               <iframe 
                 src={`${paperUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
                 className="w-full h-full" 
@@ -232,9 +289,9 @@ export default function PaperPage({ params }: PaperPageProps) {
         />
 
         {/* Agent Panel - Right Side */}
-        <div 
+        <div
           className="flex-shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-black"
-          style={{ width: `${panelWidth}px` }}
+          style={{ width: `${panelWidth}px`, height: 'calc(100vh - 4rem)' }}
         >
           <ChatPanel paperUrl={paperUrl} displayUrl={displayUrl} />
         </div>

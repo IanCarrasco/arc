@@ -9,7 +9,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-berkeley-mono);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,9 +22,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
   overflow-x: hidden;
-  overflow-y:hidden;
+  overflow-y: hidden;
+  font-family: var(--font-berkeley-mono), 'Courier New', monospace;
 }
 
 /* KaTeX math styling */
@@ -43,4 +43,75 @@ body {
   max-width: 100%;
   overflow-x: auto;
   text-align: initial;
+}
+
+/* Hide vertical scrollbars on inline math elements */
+.katex {
+  overflow-y: hidden !important;
+}
+
+.katex-display {
+  overflow-y: hidden !important;
+}
+
+.katex-display > .katex {
+  overflow-y: hidden !important;
+}
+
+/* Hide scrollbars on all KaTeX elements */
+.katex * {
+  overflow-y: hidden !important;
+}
+
+/* Hide scrollbar for webkit browsers */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+
+/* Hide scrollbar track but keep thumb visible */
+.scrollbar-track-hide {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.scrollbar-track-hide::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-track-hide::-webkit-scrollbar-track {
+  background: transparent;  /* Hide track */
+}
+
+.scrollbar-track-hide::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);  /* Gray thumb */
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+.scrollbar-track-hide::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.8);  /* Darker on hover */
+}
+
+/* Dark mode scrollbar thumb */
+@media (prefers-color-scheme: dark) {
+  .scrollbar-track-hide {
+    /* Firefox dark mode */
+    scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+  }
+  
+  .scrollbar-track-hide::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.5);  /* Dark gray thumb */
+  }
+  
+  .scrollbar-track-hide::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.8);  /* Darker on hover */
+  }
 }
