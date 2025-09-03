@@ -387,14 +387,39 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
   }, [selectedImage, closeImageModal]);
 
   // Create a unique storage key based on the paper URL
-  const storageKey = React.useMemo(() => 
-    `chat-history-${btoa(paperUrl).replace(/[^a-zA-Z0-9]/g, '')}`, 
-    [paperUrl]
-  );
-  const threadsStorageKey = React.useMemo(() => 
-    `chat-threads-${btoa(paperUrl).replace(/[^a-zA-Z0-9]/g, '')}`, 
-    [paperUrl]
-  );
+  const storageKey = React.useMemo(() => {
+    // Extract arXiv ID from URL if it's an arXiv URL
+    const arxivMatch = paperUrl.match(/arxiv\.org\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)/);
+    if (arxivMatch) {
+      return `chat-history-${arxivMatch[1]}`;
+    }
+    
+    // For non-arXiv URLs, use a hash-based approach
+    let hash = 0;
+    for (let i = 0; i < paperUrl.length; i++) {
+      const char = paperUrl.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return `chat-history-${Math.abs(hash).toString(36)}`;
+  }, [paperUrl]);
+  
+  const threadsStorageKey = React.useMemo(() => {
+    // Extract arXiv ID from URL if it's an arXiv URL
+    const arxivMatch = paperUrl.match(/arxiv\.org\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)/);
+    if (arxivMatch) {
+      return `chat-threads-${arxivMatch[1]}`;
+    }
+    
+    // For non-arXiv URLs, use a hash-based approach
+    let hash = 0;
+    for (let i = 0; i < paperUrl.length; i++) {
+      const char = paperUrl.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return `chat-threads-${Math.abs(hash).toString(36)}`;
+  }, [paperUrl]);
 
   const {
     messages,
@@ -674,9 +699,10 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
     
     // Show typing indicator if last message is from assistant but has no content
     if (lastMessage?.role === 'assistant') {
-      return !lastMessage.parts || 
-             lastMessage.parts.length === 0 || 
-             !lastMessage.parts.some((part: any) => part.type === 'text' && part.text?.trim());
+      const hasContent = lastMessage.parts && 
+                        lastMessage.parts.length > 0 && 
+                        lastMessage.parts.some((part: any) => part.type === 'text' && part.text?.trim());
+      return !hasContent;
     }
     
     return false;
@@ -832,9 +858,18 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
         )}
 
         {/* Chat Messages */}
-        {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} showRaw={showRawResponse} onImageClick={handleImageClick} />
-        ))}
+        {messages.map((message) => {
+          // Don't render empty assistant messages during streaming
+          if (message.role === 'assistant' && status === 'streaming') {
+            const hasContent = message.parts && 
+                              message.parts.length > 0 && 
+                              message.parts.some((part: any) => part.type === 'text' && part.text?.trim());
+            if (!hasContent) {
+              return null; // Don't render empty assistant messages during streaming
+            }
+          }
+          return <ChatMessage key={message.id} message={message} showRaw={showRawResponse} onImageClick={handleImageClick} />;
+        })}
 
         {/* Loading state when streaming but no assistant message yet or assistant message is empty */}
         {shouldShowTypingIndicator() && (

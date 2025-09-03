@@ -15,7 +15,20 @@ export class PaperMetadataStorage {
    * Generate a storage key for a paper URL
    */
   private static generateKey(paperUrl: string): string {
-    return `${this.STORAGE_PREFIX}${btoa(paperUrl).replace(/[^a-zA-Z0-9]/g, '')}`;
+    // Extract arXiv ID from URL if it's an arXiv URL
+    const arxivMatch = paperUrl.match(/arxiv\.org\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)/);
+    if (arxivMatch) {
+      return `${this.STORAGE_PREFIX}${arxivMatch[1]}`;
+    }
+    
+    // For non-arXiv URLs, use a hash-based approach
+    let hash = 0;
+    for (let i = 0; i < paperUrl.length; i++) {
+      const char = paperUrl.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return `${this.STORAGE_PREFIX}${Math.abs(hash).toString(36)}`;
   }
 
   /**
@@ -27,6 +40,8 @@ export class PaperMetadataStorage {
       const dataToStore = {
         ...metadata,
         fetchedAt: metadata.fetchedAt.toISOString(),
+        // Store the original URL for retrieval
+        originalUrl: metadata.url,
       };
       localStorage.setItem(key, JSON.stringify(dataToStore));
       console.log('Successfully stored metadata for:', metadata.url, 'with key:', key);
@@ -96,11 +111,14 @@ export class PaperMetadataStorage {
         const key = localStorage.key(i);
         if (key && key.startsWith(this.STORAGE_PREFIX)) {
           try {
-            const encodedUrl = key.replace(this.STORAGE_PREFIX, '');
-            const paperUrl = atob(encodedUrl);
+            const stored = localStorage.getItem(key);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              const metadata = {
+                ...parsed,
+                fetchedAt: new Date(parsed.fetchedAt),
+              };
 
-            const metadata = this.get(paperUrl);
-            if (metadata) {
               const ageMs = Date.now() - metadata.fetchedAt.getTime();
               const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
 

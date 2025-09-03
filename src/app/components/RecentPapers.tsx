@@ -26,7 +26,20 @@ export default function RecentPapers() {
 
         try {
           // Get thread data to find actual last activity and thread count
-          const threadsKey = `chat-threads-${btoa(metadata.url).replace(/[^a-zA-Z0-9]/g, '')}`;
+          let threadsKey: string;
+          const arxivMatch = metadata.url.match(/arxiv\.org\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)/);
+          if (arxivMatch) {
+            threadsKey = `chat-threads-${arxivMatch[1]}`;
+          } else {
+            // For non-arXiv URLs, use a hash-based approach
+            let hash = 0;
+            for (let i = 0; i < metadata.url.length; i++) {
+              const char = metadata.url.charCodeAt(i);
+              hash = ((hash << 5) - hash) + char;
+              hash = hash & hash; // Convert to 32-bit integer
+            }
+            threadsKey = `chat-threads-${Math.abs(hash).toString(36)}`;
+          }
           const threadsData = localStorage.getItem(threadsKey);
 
           if (threadsData) {
