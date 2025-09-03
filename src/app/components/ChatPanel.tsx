@@ -138,7 +138,8 @@ const ChatInput = React.memo(({
   onStop,
   isStreaming,
   onCaptureClick,
-  isSelectionActive
+  isSelectionActive,
+  hasApiKey
 }: { 
   onSubmit: (input: string) => void;
   disabled: boolean;
@@ -147,6 +148,7 @@ const ChatInput = React.memo(({
   isStreaming: boolean;
   onCaptureClick?: () => void;
   isSelectionActive?: boolean;
+  hasApiKey?: boolean;
 }) => {
   const [input, setInput] = useState('');
 
@@ -164,6 +166,29 @@ const ChatInput = React.memo(({
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-800 px-6 py-4 flex-shrink-0">
+      {/* API Key Warning */}
+      {!hasApiKey && (
+        <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>API key required:</strong> Please set your Vercel AI Gateway key in{' '}
+                <a 
+                  href="/settings" 
+                  className="underline hover:no-underline font-medium"
+                >
+                  Settings
+                </a>{' '}
+                to send messages.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center space-x-2">
         {/* Capture Button */}
         {onCaptureClick && !isSelectionActive && (
@@ -356,6 +381,45 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
   
   // Image modal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // API key state
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  
+  // Check API key status on mount and when storage changes
+  useEffect(() => {
+    const checkApiKey = () => {
+      try {
+        const apiKey = localStorage.getItem('vercel-ai-gateway-key');
+        setHasApiKey(!!(apiKey && apiKey.trim()));
+      } catch (error) {
+        console.error('Failed to check API key:', error);
+        setHasApiKey(false);
+      }
+    };
+    
+    checkApiKey();
+    
+    // Listen for storage changes (when API key is updated in settings)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'vercel-ai-gateway-key') {
+        checkApiKey();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events (for same-tab updates)
+    const handleApiKeyUpdate = () => {
+      checkApiKey();
+    };
+    
+    window.addEventListener('apiKeyUpdated', handleApiKeyUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('apiKeyUpdated', handleApiKeyUpdate);
+    };
+  }, []);
   
   // Remove captured region
   const handleRemoveCapturedRegion = useCallback((id: string) => {
@@ -590,13 +654,28 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
     // Get API key from localStorage
     const apiKey = localStorage.getItem('vercel-ai-gateway-key');
     
+    // Check if API key is provided
+    if (!apiKey || !apiKey.trim()) {
+      // Show user-friendly alert with option to go to settings
+      const shouldGoToSettings = confirm(
+        'API key is required to send messages.\n\n' +
+        'Please set your Vercel AI Gateway key in Settings.\n\n' +
+        'Click OK to go to Settings, or Cancel to stay here.'
+      );
+      
+      if (shouldGoToSettings) {
+        window.location.href = '/settings';
+      }
+      return;
+    }
+    
     await sendMessage({
       text: inputText,
     },
       {
         body: {
           input_file: paperUrl,
-          apiKey: apiKey || undefined,
+          apiKey: apiKey,
           capturedRegions: capturedRegions,
         }
       });
@@ -969,6 +1048,7 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
         isStreaming={status === 'streaming'}
         onCaptureClick={onCaptureClick}
         isSelectionActive={isSelectionActive}
+        hasApiKey={hasApiKey}
       />
 
       {/* Image Modal */}

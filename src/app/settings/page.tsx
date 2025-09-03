@@ -42,6 +42,9 @@ export default function SettingsPage() {
       // Save to localStorage
       localStorage.setItem('vercel-ai-gateway-key', apiKey.trim());
       
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new CustomEvent('apiKeyUpdated'));
+      
       setMessage('API key saved successfully!');
       setMessageType('success');
     } catch (error) {
@@ -56,6 +59,10 @@ export default function SettingsPage() {
     try {
       localStorage.removeItem('vercel-ai-gateway-key');
       setApiKey('');
+      
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new CustomEvent('apiKeyUpdated'));
+      
       setMessage('API key cleared successfully!');
       setMessageType('success');
     } catch (error) {

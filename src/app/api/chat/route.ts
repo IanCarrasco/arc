@@ -8,10 +8,13 @@ export async function POST(req: NextRequest) {
 
     console.log(messages);
     
-    // Set the API key in environment if provided
-    if (apiKey) {
-      process.env.VERCEL_AI_GATEWAY_API_KEY = apiKey;
+    // Validate that API key is provided
+    if (!apiKey) {
+      return new Response('API key is required', { status: 401 });
     }
+    
+    // Set the API key in environment
+    process.env.VERCEL_AI_GATEWAY_API_KEY = apiKey;
     
     // Build the initial messages array with PDF file
     const initialMessages = [
