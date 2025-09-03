@@ -270,6 +270,30 @@ export default function SelectionOverlay({ isActive, onToggle, onCapturedRegion,
 
 
 
+  // Handle Escape key to cancel selection
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isActive && (isSelecting || selection)) {
+        console.log('🚫 Escape pressed - canceling selection');
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Cancel current selection
+        setIsSelecting(false);
+        setSelection(null);
+        setCaptureFailed(false);
+        
+        // Optionally deactivate the overlay entirely
+        // onToggle();
+      }
+    };
+
+    if (isActive) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isActive, isSelecting, selection]);
+
   // Prevent PDF viewer interactions when overlay is active
   useEffect(() => {
     const container = overlayRef.current?.parentElement;
@@ -300,7 +324,6 @@ export default function SelectionOverlay({ isActive, onToggle, onCapturedRegion,
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           style={{ 
-            backgroundColor: 'rgba(255, 0, 0, 0.1)',
             cursor: 'crosshair',
             pointerEvents: 'auto'
           }}
@@ -308,7 +331,7 @@ export default function SelectionOverlay({ isActive, onToggle, onCapturedRegion,
           {/* Selection rectangle */}
           {selection && (
             <div
-              className="absolute border-2 border-blue-500 bg-blue-500 bg-opacity-20 pointer-events-none"
+              className="absolute border-2 border-blue-500 bg-opacity-20 pointer-events-none"
               style={{
                 left: selection.x,
                 top: selection.y,
@@ -316,6 +339,15 @@ export default function SelectionOverlay({ isActive, onToggle, onCapturedRegion,
                 height: selection.height,
               }}
             />
+          )}
+          
+          {/* Selection hint message */}
+          {(isSelecting || selection) && !captureFailed && (
+            <div className="absolute top-4 right-4 bg-blue-500 bg-opacity-90 text-white text-sm px-3 py-2 rounded max-w-xs">
+              <div className="text-xs">
+                Press <kbd className="px-1 py-0.5 bg-blue-600 rounded text-xs">Esc</kbd> to cancel
+              </div>
+            </div>
           )}
           
           {/* Warning message when capture fails */}

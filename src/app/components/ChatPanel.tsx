@@ -268,7 +268,7 @@ const TypingIndicator = React.memo(() => {
 TypingIndicator.displayName = 'TypingIndicator';
 
 // Memoized message component to prevent unnecessary re-renders
-const ChatMessage = React.memo(({ message, showRaw }: { message: any; showRaw: boolean }) => {
+const ChatMessage = React.memo(({ message, showRaw, onImageClick }: { message: any; showRaw: boolean; onImageClick?: (base64: string) => void }) => {
   // Calculate message content length for dynamic width
   const messageText = message.parts?.find((part: any) => part.type === 'text')?.text || '';
   const contentLength = messageText.length;
@@ -302,6 +302,29 @@ const ChatMessage = React.memo(({ message, showRaw }: { message: any; showRaw: b
                     ) : (
                       renderMarkdown(part.text)
                     )}
+                  </div>
+                );
+              case 'file':
+                // Handle image files (captured regions)
+                if (part.mediaType?.startsWith('image/')) {
+                  return (
+                    <div key={index} className="my-2">
+                      <img
+                        src={part.data}
+                        alt="Captured region"
+                        className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => onImageClick?.(part.data)}
+                        title="Click to enlarge"
+                      />
+                    </div>
+                  );
+                }
+                // Handle other file types
+                return (
+                  <div key={index} className="my-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      File: {part.mediaType || 'Unknown type'}
+                    </p>
                   </div>
                 );
               default:
@@ -549,9 +572,10 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
         body: {
           input_file: paperUrl,
           apiKey: apiKey || undefined,
+          capturedRegions: capturedRegions,
         }
       });
-  }, [sendMessage, paperUrl]);
+  }, [sendMessage, paperUrl, capturedRegions]);
 
   const handleClearMessages = useCallback(() => {
     setMessages([]);
@@ -809,7 +833,7 @@ export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive,
 
         {/* Chat Messages */}
         {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} showRaw={showRawResponse} />
+          <ChatMessage key={message.id} message={message} showRaw={showRawResponse} onImageClick={handleImageClick} />
         ))}
 
         {/* Loading state when streaming but no assistant message yet or assistant message is empty */}

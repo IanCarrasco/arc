@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, input_file, apiKey } = await req.json();
+    const { messages, input_file, apiKey, capturedRegions } = await req.json();
 
     console.log(messages);
     
@@ -13,6 +13,32 @@ export async function POST(req: NextRequest) {
       process.env.VERCEL_AI_GATEWAY_API_KEY = apiKey;
     }
     
+    // Build the initial messages array with PDF file
+    const initialMessages = [
+      {
+        role: 'user' as const,
+        content: [{
+          type: 'file' as const,
+          data: input_file,
+          mediaType: 'application/pdf',
+        }],
+      },
+    ];
+
+    // Add captured regions as image messages if they exist
+    if (capturedRegions && capturedRegions.length > 0) {
+      capturedRegions.forEach((region: { base64: string }) => {
+        initialMessages.push({
+          role: 'user' as const,
+          content: [{
+            type: 'file' as const,
+            data: region.base64,
+            mediaType: 'image/png',
+          }],
+        });
+      });
+    }
+
     const result = streamText({
       model: gateway('gpt-5-mini'),
       providerOptions: {
@@ -30,7 +56,7 @@ Output should be written in the same language as the user's message and be using
 IMPORTANT
 Use markdown formatting to structure your responses clearly and educationally. 
 
-Lets break the response into logical sections using headers (<h1>, <h2>, <h3>, <h4>) for visual clarity.
+Lets break the response into logical sections using headers (#, ##, ###, ####) for visual clarity.
 
 When writing any mathematical content, always format it in Markdown using LaTeX/KaTeX syntax:
 
@@ -50,14 +76,7 @@ Try not to be too verbose as it is difficult to understand long messages.
 
 This will ensure proper mathematical and markdown rendering in the chat interface.`,
       messages: [
-        {
-          role: 'user',
-          content: [{
-            type: 'file',
-            data: input_file,
-            mediaType: 'application/pdf',
-          }],
-        },
+        ...initialMessages,
         ...convertToModelMessages(messages),
       ],
     });

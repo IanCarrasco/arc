@@ -26,7 +26,7 @@ export interface PDFViewerRef {
 const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(({ url, onPageLoad, onLoadError, isSelectionActive, onToggleSelection, onCapturedRegion }, ref) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1.25);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,7 +97,7 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(({ url, onPageLoad, o
   }, []);
 
   const resetZoom = useCallback(() => {
-    setScale(1.0);
+    setScale(1.25);
   }, []);
 
   const goToPage = useCallback((page: number) => {
@@ -109,7 +109,7 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(({ url, onPageLoad, o
   // Reset state when URL changes
   useEffect(() => {
     setPageNumber(1);
-    setScale(1.0);
+    setScale(1.25);
     setIsLoading(true);
     setError(null);
   }, [url]);
@@ -131,9 +131,9 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(({ url, onPageLoad, o
   }
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full bg-gray-100 dark:bg-gray-800">
+    <div ref={containerRef} className="flex flex-col h-full bg-gray-100 dark:bg-black">
       {/* PDF Controls */}
-      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="flex items-center justify-between p-3 bg-white dark:bg-transparent border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center space-x-2">
           {/* Page Navigation */}
           <button
@@ -212,7 +212,7 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(({ url, onPageLoad, o
           </div>
         )}
 
-        <div className="flex justify-center">
+        <div className="flex justify-center items-center min-h-full">
           <Document
             file={url}
             onLoadSuccess={onDocumentLoadSuccess}
