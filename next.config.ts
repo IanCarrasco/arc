@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  webpack: (config) => {
+    config.module.rules.push(
+      {
+        test: /\.css$/i,
+        use: ['style-loader', 'css-loader'],
+      }
+    );
+    return config;
+  },
   // Optional: Add headers for better CORS handling
   async headers() {
     return [

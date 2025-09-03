@@ -13,9 +13,21 @@ import remarkMath from 'remark-math';
 // @ts-ignore - rehype-katex doesn't have proper TypeScript definitions
 import rehypeKatex from 'rehype-katex';
 
+interface CapturedRegion {
+  id: string;
+  base64: string;
+  timestamp: Date;
+}
+
 interface ChatPanelProps {
   paperUrl: string;
   displayUrl: string;
+  onCaptureClick?: () => void;
+  isSelectionActive?: boolean;
+  capturedRegions?: CapturedRegion[];
+  onCapturedRegion?: (region: CapturedRegion) => void;
+  onRemoveCapturedRegion?: (id: string) => void;
+  onClearAllCapturedRegions?: () => void;
 }
 
 // Utility function to render markdown with built-in LaTeX support
@@ -124,13 +136,17 @@ const ChatInput = React.memo(({
   disabled, 
   placeholder,
   onStop,
-  isStreaming
+  isStreaming,
+  onCaptureClick,
+  isSelectionActive
 }: { 
   onSubmit: (input: string) => void;
   disabled: boolean;
   placeholder: string;
   onStop: () => void;
   isStreaming: boolean;
+  onCaptureClick?: () => void;
+  isSelectionActive?: boolean;
 }) => {
   const [input, setInput] = useState('');
 
@@ -148,61 +164,90 @@ const ChatInput = React.memo(({
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-800 px-6 py-4 flex-shrink-0">
-      <form onSubmit={handleSubmit} className="relative">
-        <input
-          type="text"
-          value={input}
-          onChange={handleInputChange}
-          placeholder={placeholder}
-          disabled={disabled}
-          className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
-        />
-        {isStreaming ? (
+      <div className="flex items-center space-x-2">
+        {/* Capture Button */}
+        {onCaptureClick && !isSelectionActive && (
           <button
             type="button"
-            onClick={onStop}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors duration-200"
-            aria-label="Stop streaming"
+            onClick={onCaptureClick}
+            disabled={disabled}
+            className="flex-shrink-0 px-3 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white text-sm rounded-xl transition-colors duration-200 shadow-sm"
+            title="Capture region from PDF"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 6h12v12H6z"
-              />
-            </svg>
-          </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={disabled || !input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white transition-colors duration-200"
-            aria-label="Send message"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-              />
-            </svg>
+            📷
           </button>
         )}
-      </form>
+        
+        {/* Cancel Button - shown when selection is active */}
+        {isSelectionActive && (
+          <button
+            type="button"
+            onClick={onCaptureClick}
+            disabled={disabled}
+            className="flex-shrink-0 px-3 py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white text-sm rounded-xl transition-colors duration-200 shadow-sm"
+            title="Cancel selection"
+          >
+            ✕
+          </button>
+        )}
+        
+        {/* Input Form */}
+        <form onSubmit={handleSubmit} className="relative flex-1">
+          <input
+            type="text"
+            value={input}
+            onChange={handleInputChange}
+            placeholder={isSelectionActive ? "Select a region to capture..." : placeholder}
+            disabled={disabled || isSelectionActive}
+            className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
+          />
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={onStop}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors duration-200"
+              aria-label="Stop streaming"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 6h12v12H6z"
+                />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={disabled || !input.trim() || isSelectionActive}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white transition-colors duration-200"
+              aria-label="Send message"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                />
+              </svg>
+            </button>
+          )}
+        </form>
+      </div>
     </div>
   );
 });
@@ -271,7 +316,7 @@ const ChatMessage = React.memo(({ message, showRaw }: { message: any; showRaw: b
 
 ChatMessage.displayName = 'ChatMessage';
 
-export default function ChatPanel({ paperUrl }: ChatPanelProps) {
+export default function ChatPanel({ paperUrl, onCaptureClick, isSelectionActive, capturedRegions = [], onCapturedRegion, onRemoveCapturedRegion, onClearAllCapturedRegions }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isInitialRender = useRef(true);
@@ -285,6 +330,38 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
   
   // Raw response toggle state
   const [showRawResponse, setShowRawResponse] = useState(false);
+  
+  // Image modal state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // Remove captured region
+  const handleRemoveCapturedRegion = useCallback((id: string) => {
+    onRemoveCapturedRegion?.(id);
+  }, [onRemoveCapturedRegion]);
+
+  // Handle image click to show enlarged view
+  const handleImageClick = useCallback((base64: string) => {
+    setSelectedImage(base64);
+  }, []);
+
+  // Close image modal
+  const closeImageModal = useCallback(() => {
+    setSelectedImage(null);
+  }, []);
+
+  // Handle keyboard events for modal
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && selectedImage) {
+        closeImageModal();
+      }
+    };
+
+    if (selectedImage) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [selectedImage, closeImageModal]);
 
   // Create a unique storage key based on the paper URL
   const storageKey = React.useMemo(() => 
@@ -784,6 +861,46 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
         )}
       </div>
 
+      {/* Captured Regions Section */}
+      {capturedRegions.length > 0 && (
+        <div className="border-t border-gray-200 dark:border-gray-800 px-6 py-3 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Captured Regions ({capturedRegions.length})
+            </h3>
+            <button
+              onClick={onClearAllCapturedRegions}
+              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            >
+              Clear All
+            </button>
+          </div>
+          <div className="flex gap-2 overflow-x-auto scrollbar-track-hide">
+            {capturedRegions.map((region) => (
+              <div key={region.id} className="relative flex-shrink-0">
+                <img
+                  src={region.base64}
+                  alt={`Captured region ${region.id}`}
+                  className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => handleImageClick(region.base64)}
+                  title="Click to enlarge"
+                />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveCapturedRegion(region.id);
+                  }}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                  title="Remove region"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input Area */}
       <ChatInput 
         onSubmit={handleSubmit}
@@ -791,7 +908,33 @@ export default function ChatPanel({ paperUrl }: ChatPanelProps) {
         placeholder="Ask about this paper..."
         onStop={stop}
         isStreaming={status === 'streaming'}
+        onCaptureClick={onCaptureClick}
+        isSelectionActive={isSelectionActive}
       />
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] p-4">
+            <img
+              src={selectedImage}
+              alt="Enlarged captured region"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={closeImageModal}
+              className="absolute top-2 right-2 w-8 h-8 bg-black bg-opacity-50 text-white rounded-full flex items-center justify-center hover:bg-opacity-75 transition-all"
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

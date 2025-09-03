@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import ChatPanel from '../../components/ChatPanel';
 import PaperInfoPanel from '../../components/PaperInfoPanel';
+import SelectionOverlay from '../../components/SelectionOverlay';
+import PDFViewer, { PDFViewerRef } from '../../components/PDFViewer';
 import { PaperMetadataStorage, PaperMetadata } from '../../utils/paperMetadata';
 
 interface PaperPageProps {
@@ -23,8 +25,12 @@ export default function PaperPage({ params }: PaperPageProps) {
   const [paperTitle, setPaperTitle] = useState('');
   const [paperAuthors, setPaperAuthors] = useState<string[]>([]);
   const [paperAbstract, setPaperAbstract] = useState('');
+  const [isSelectionActive, setIsSelectionActive] = useState(false);
+  const [capturedRegions, setCapturedRegions] = useState<Array<{id: string; base64: string; timestamp: Date}>>([]);
   const resizeRef = useRef<HTMLDivElement>(null);
   const leftResizeRef = useRef<HTMLDivElement>(null);
+  const pdfViewerRef = useRef<HTMLDivElement | null>(null);
+  const pdfViewerComponentRef = useRef<PDFViewerRef>(null);
 
   // Decode the URL parameter
   const decodedParam = decodeURIComponent(resolvedParams.url);
@@ -240,6 +246,31 @@ export default function PaperPage({ params }: PaperPageProps) {
     }
   }, [isResizing, isLeftResizing]);
 
+  // Toggle selection overlay
+  const toggleSelection = useCallback(() => {
+    setIsSelectionActive(prev => !prev);
+  }, []);
+
+  const handleCapturedRegion = useCallback((region: {id: string; base64: string; timestamp: Date}) => {
+    setCapturedRegions(prev => [...prev, region]);
+  }, []);
+
+  const removeCapturedRegion = useCallback((id: string) => {
+    setCapturedRegions(prev => prev.filter(region => region.id !== id));
+  }, []);
+
+  const clearAllCapturedRegions = useCallback(() => {
+    setCapturedRegions([]);
+  }, []);
+
+  // Memoize PaperInfoPanel props to prevent unnecessary re-renders
+  const paperInfoProps = useMemo(() => ({
+    title: paperTitle,
+    authors: paperAuthors,
+    abstract: paperAbstract,
+    displayUrl: displayUrl
+  }), [paperTitle, paperAuthors, paperAbstract, displayUrl]);
+
   return (
     <div className="min-h-screen bg-white dark:bg-black flex flex-col">
       {/* Main Content - Adjusted for header */}
@@ -249,12 +280,7 @@ export default function PaperPage({ params }: PaperPageProps) {
           className="flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black"
           style={{ width: `${leftPanelWidth}px`, height: 'calc(100vh - 4rem)' }}
         >
-          <PaperInfoPanel 
-            title={paperTitle}
-            authors={paperAuthors}
-            abstract={paperAbstract}
-            displayUrl={displayUrl}
-          />
+          <PaperInfoPanel {...paperInfoProps} />
         </div>
 
         {/* Left Resize Handle */}
@@ -270,11 +296,21 @@ export default function PaperPage({ params }: PaperPageProps) {
           <div className="w-full max-w-6xl mx-auto space-y-6">
             {/* PDF Viewer */}
             <div className="relative w-full h-[calc(100vh-6rem)]">
-              <iframe 
-                src={`${paperUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-                className="w-full h-full" 
-                title="PDF Viewer" 
-              />
+              <div ref={pdfViewerRef} className="w-full h-full">
+                <PDFViewer 
+                  ref={pdfViewerComponentRef}
+                  url={paperUrl}
+                  onPageLoad={(numPages) => {
+                    console.log('PDF loaded with', numPages, 'pages');
+                  }}
+                  onLoadError={(error) => {
+                    console.error('PDF load error:', error);
+                  }}
+                  isSelectionActive={isSelectionActive}
+                  onToggleSelection={toggleSelection}
+                  onCapturedRegion={handleCapturedRegion}
+                />
+              </div> 
             </div>
 
           </div>
@@ -293,7 +329,16 @@ export default function PaperPage({ params }: PaperPageProps) {
           className="flex-shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-black"
           style={{ width: `${panelWidth}px`, height: 'calc(100vh - 4rem)' }}
         >
-          <ChatPanel paperUrl={paperUrl} displayUrl={displayUrl} />
+          <ChatPanel 
+            paperUrl={paperUrl} 
+            displayUrl={displayUrl}
+            onCaptureClick={toggleSelection}
+            isSelectionActive={isSelectionActive}
+            capturedRegions={capturedRegions}
+            onCapturedRegion={handleCapturedRegion}
+            onRemoveCapturedRegion={removeCapturedRegion}
+            onClearAllCapturedRegions={clearAllCapturedRegions}
+          />
         </div>
       </main>
     </div>

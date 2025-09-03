@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 
 interface PaperInfoPanelProps {
   title: string;
@@ -9,15 +9,17 @@ interface PaperInfoPanelProps {
   displayUrl: string;
 }
 
-export default function PaperInfoPanel({ title, authors, abstract, displayUrl }: PaperInfoPanelProps) {
+const PaperInfoPanel = memo(function PaperInfoPanel({ title, authors, abstract, displayUrl }: PaperInfoPanelProps) {
   console.log('PaperInfoPanel received:', { title, authors, abstract, displayUrl });
 
-  // Function to decode HTML entities
-  const decodeHtmlEntities = (text: string) => {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = text;
-    return textarea.value;
-  };
+  // Function to decode HTML entities - memoized to prevent recreation on every render
+  const decodeHtmlEntities = useMemo(() => {
+    return (text: string) => {
+      const textarea = document.createElement('textarea');
+      textarea.innerHTML = text;
+      return textarea.value;
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800">
@@ -82,4 +84,15 @@ export default function PaperInfoPanel({ title, authors, abstract, displayUrl }:
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memoization
+  return (
+    prevProps.title === nextProps.title &&
+    prevProps.abstract === nextProps.abstract &&
+    prevProps.displayUrl === nextProps.displayUrl &&
+    prevProps.authors.length === nextProps.authors.length &&
+    prevProps.authors.every((author, index) => author === nextProps.authors[index])
+  );
+});
+
+export default PaperInfoPanel;
