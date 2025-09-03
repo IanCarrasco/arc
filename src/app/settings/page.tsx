@@ -235,9 +235,9 @@ export default function SettingsPage() {
                   const stats = getCacheStats();
                   return (
                     <div className="space-y-1">
-                      <div>Paper metadata: {stats.paperMetadata} entries</div>
-                      <div>Chat threads: {stats.chatThreads} entries</div>
-                      <div>Total storage: {stats.totalSize}</div>
+                      <div>Paper metadata: {stats.papers} entries</div>
+                      <div>Chat threads: {stats.chats} entries</div>
+                      <div>Total storage: {stats.total}</div>
                     </div>
                   );
                 })()}
