@@ -71,42 +71,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleTest = async () => {
-    if (!apiKey.trim()) {
-      setMessage('Please enter an API key first');
-      setMessageType('error');
-      return;
-    }
-
-    setIsLoading(true);
-    setMessage('');
-    setMessageType('');
-
-    try {
-      // Test the API key by making a simple request
-      const response = await fetch('/api/test-key', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ apiKey: apiKey.trim() }),
-      });
-
-      if (response.ok) {
-        setMessage('API key is valid and working!');
-        setMessageType('success');
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'API key test failed');
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to test API key');
-      setMessageType('error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleClearCache = () => {
     try {
       const result = CacheManager.clearAll();
@@ -202,15 +166,6 @@ export default function SettingsPage() {
               >
                 {isLoading ? 'Saving...' : 'Save Key'}
               </button>
-              
-              <button
-                onClick={handleTest}
-                disabled={isLoading || !apiKey.trim()}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-lg transition-colors duration-200 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Testing...' : 'Test Key'}
-              </button>
-              
               <button
                 onClick={handleClear}
                 disabled={isLoading}
