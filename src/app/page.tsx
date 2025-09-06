@@ -41,8 +41,8 @@ export default function Home() {
         return absMatch[1];
       }
 
-      // Pattern: /pdf/1234.5678.pdf or /pdf/1234.5678v1.pdf
-      const pdfMatch = pathname.match(/^\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)\.pdf$/);
+      // Pattern: /pdf/1234.5678.pdf or /pdf/1234.5678v1.pdf or /pdf/1234.5678
+      const pdfMatch = pathname.match(/^\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)(?:\.pdf)?$/);
       if (pdfMatch) {
         return pdfMatch[1];
       }
